@@ -3,9 +3,9 @@ const Tour = require('./../Models/tourModel')
 const APIFeatures = require('./../utils/apiFeatures')
 
 
- exports.getAllTours = async (req, res) => {
-  try {
-    const features = new APIFeatures(Tour.find(),req.query).filter().sort().limitFields().paginage() 
+ exports.getAllTours = catchAsync( async (req, res,next) => {
+  
+    const features = new APIFeatures(Tour.find(),req.query).filter().sort().limitFields().paginate() 
     const tours = await features.query
 
      res.status(200).json({
@@ -15,16 +15,17 @@ const APIFeatures = require('./../utils/apiFeatures')
       tours,
     },
   });
-  } catch (error) {
-    res.status(404).json({
-      status:'fail',
-      message:error
-    })
+  
+  // catch (error) {
+  //   res.status(404).json({
+  //     status:'fail',
+  //     message: error
+  //   })
     
-  }
+  // }
 
  
-};
+});
 
  exports.getTour = async (req, res) => {
   try {
