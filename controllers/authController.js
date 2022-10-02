@@ -1,8 +1,11 @@
+const crypto = require('crypto')
 const {promisify} = require('util')
 const jwt = require('jsonwebtoken')
 const { catchAsync } = require('../utils/catchAsync')
 const User = require('./../Models/userModel')
 const AppError = require('./../utils/appError')
+const sendEmail = require('./../utils/email')
+
 
 
 const signToken = id=>{
@@ -95,3 +98,69 @@ exports.restrictTo = (...role)=>{
        next()  
     }
 }
+
+exports.forgetPassword = catchAsync(async(req,res,next)=>{
+const user = await User.findOne({email: req.body.email})
+if(!user){
+    return next(new AppError("There is no user with this email.",404))
+}
+
+const resetToken = user.createPasswordResetToken();
+await user.save({validateBeforeSave: false})
+
+const resetURL =  `${req.protocol}://${req.get('host')}/api/v1/resetPassword/${resetToken}`
+
+const message = `Forget your Password? send your new password to the send link provided: ${resetURL} `
+
+try {
+    await sendEmail({
+        email:user.email,
+        subject: 'Your password reset token (valid for 10 min)',
+        message
+    })
+
+    res.status(200).json({
+        status:'success',
+        message: "token send to email"
+    })
+
+} catch (error) {
+   user.passwordResetToken = undefined;
+   user.passwordResetExpires = undefined;
+   await user.save({validateBeforeSave: false}) 
+
+   return next(new AppError(`the error is ${error}`,500))
+}
+
+//    next() 
+})
+
+exports.resetPassword  = catchAsync(async(req,res,next)=>{
+    // get user base on token
+    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex')
+
+    const user = await User.findOne({
+        passwordResetToken:hashedToken,passwordResetExpires :{$gt:Date.now()}
+    })
+
+   if(!user){
+    return next(new AppError('Token is invalid or it has expires',400))
+   } 
+
+   user.password = req.body.password
+   user.confirmPassword = req.body.confirmPassword
+   user.passwordResetExpires = undefined
+   user.passwordResetToken = undefined
+   await user.save()
+
+//    update changePasswordAt property for user
+//    Log user in, send jwt
+
+const token = signToken(user._id)
+
+res.status(200).json({
+    status:'success',
+    token
+})
+
+})
